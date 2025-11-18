@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Edit Profile{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow-sm p-3">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Edit Profile</h4>
+        {% if user.profile_image %}
+          <img id="smallPreview" src="{{ user.profile_image.url }}" class="rounded-circle" style="width:44px; height:44px; object-fit:cover; border:2px solid #eee;">
+        {% else %}
+          <img id="smallPreview" src="{% static 'default-avatar.png' %}" class="rounded-circle" style="width:44px; height:44px; object-fit:cover; border:2px solid #eee;">
+        {% endif %}
+      </div>
+
+      <form method="post" enctype="multipart/form-data" id="profileForm">
+        {% csrf_token %}
+        <div class="row">
+          <div class="col-md-6">
+            {% for field in form %}
+              {% if field.name != 'profile_image' %}
+                <div class="mb-3">
+                  {{ field.label_tag }}{{ field }}
+                  {% for err in field.errors %}<div class="text-danger small">{{ err }}</div>{% endfor %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Profile photo</label>
+            <div class="mb-2">
+              {% if user.profile_image %}
+                <img id="currentAvatar" src="{{ user.profile_image.url }}" class="rounded-circle" style="width:160px; height:160px; object-fit:cover; border:2px solid #f1f1f1;">
+              {% else %}
+                <img id="currentAvatar" src="{% static 'default-avatar.png' %}" class="rounded-circle" style="width:160px; height:160px; object-fit:cover; border:2px solid #f1f1f1;">
+              {% endif %}
+            </div>
+
+            <input type="file" id="avatarInput" accept="image/*" class="form-control">
+            <div class="mt-2">
+              <button type="button" id="openCropBtn" class="btn btn-outline-primary btn-sm" disabled>Open cropper</button>
+              <button type="button" id="clearImageBtn" class="btn btn-outline-secondary btn-sm">Cancel</button>
+            </div>
+
+            <input type="hidden" name="cropped_image" id="croppedImageInput">
+            <input type="hidden" id="useFallbackFile" name="use_fallback" value="0">
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <button type="submit" class="btn btn-success">Save changes</button>
+          <a href="{% url 'accounts:profile' %}" class="btn btn-outline-secondary ms-2">Cancel</a>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<!-- Crop modal -->
+<div class="modal fade" id="cropModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Crop & Resize Photo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="closeCropModal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-lg-5 d-flex justify-content-center">
+            <!-- Crop box: canvas inside a square container with grid overlay -->
+            <div id="cropBox" style="width:360px; height:360px; position:relative; border-radius:10px; overflow:hidden; border:1px solid #ddd; background:#f7f7f7;">
+              <canvas id="cropCanvas" width="360" height="360" style="display:block; touch-action: none;"></canvas>
+
+              <!-- Grid overlay (3x3 lines) -->
+              <div style="position:absolute; inset:0; pointer-events:none;">
+                <div style="height:100%; width:100%; display:grid; grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr 1fr;">
+                  <div style="border-right:1px solid rgba(255,255,255,0.35)"></div>
+                  <div style="border-right:1px solid rgba(255,255,255,0.35)"></div>
+                  <div></div>
+
+                  <div style="border-top:1px solid rgba(255,255,255,0.35); border-right:1px solid rgba(255,255,255,0.35)"></div>
+                  <div style="border-top:1px solid rgba(255,255,255,0.35); border-right:1px solid rgba(255,255,255,0.35)"></div>
+                  <div style="border-top:1px solid rgba(255,255,255,0.35)"></div>
+
+                  <div style="border-top:1px solid rgba(255,255,255,0.35)"></div>
+                  <div style="border-top:1px solid rgba(255,255,255,0.35)"></div>
+                  <div style="border-top:1px solid rgba(255,255,255,0.35)"></div>
+                </div>
+              </div>
+
+              <!-- Circular mask shadow for clearer preview -->
+              <div style="position:absolute; inset:0; pointer-events:none;">
+                <svg width="100%" height="100%">
+                  <defs>
+                    <mask id="circleMask">
+                      <rect width="100%" height="100%" fill="white"/>
+                      <circle cx="50%" cy="50%" r="38%" fill="black"/>
+                    </mask>
+                  </defs>
+                  <rect width="100%" height="100%" fill="rgba(0,0,0,0.35)" mask="url(#circleMask)"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-7">
+            <label class="form-label">Zoom</label>
+            <input type="range" id="zoomRange" min="0.5" max="4" step="0.01" value="1" class="form-range" style="max-width:420px;">
+            <div class="d-flex gap-2 align-items-center mt-2">
+              <button class="btn btn-primary btn-sm" id="saveCropped">Save cropped</button>
+              <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal" id="cancelCrop">Cancel</button>
+            </div>
+            <hr>
+            <p class="small text-muted">Tip: Use a reasonably large original image for better quality. Use two fingers to pinch on mobile, or mouse-wheel to zoom (if supported).</p>
+            <p class="small text-muted">Drag the image to reposition inside the circle. Grid helps center face or object.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/*
+  Improved cropper:
+  - fits image into crop box by default (no auto-zoom beyond fit)
+  - supports pan (pointer events) and pinch-to-zoom (multi-pointer)
+  - shows grid overlay and circular mask
+  - outputs circular PNG dataURL into hidden input `croppedImageInput`
+  - friendly and commented for beginners
+*/
+
+(function(){
+  // Elements
+  const avatarInput = document.getElementById('avatarInput');
+  const openCropBtn = document.getElementById('openCropBtn');
+  const cropModalEl = document.getElementById('cropModal');
+  const cropModal = new bootstrap.Modal(cropModalEl);
+  const cropCanvas = document.getElementById('cropCanvas');
+  const ctx = cropCanvas.getContext('2d', { alpha: true });
+  const zoomRange = document.getElementById('zoomRange');
+  const saveCropped = document.getElementById('saveCropped');
+  const croppedImageInput = document.getElementById('croppedImageInput');
+  const currentAvatar = document.getElementById('currentAvatar');
+  const smallPreview = document.getElementById('smallPreview');
+  const clearImageBtn = document.getElementById('clearImageBtn');
+  const profileForm = document.getElementById('profileForm');
+  const useFallbackFile = document.getElementById('useFallbackFile');
+
+  // Internal state
+  let img = new Image();
+  img.crossOrigin = 'anonymous';
+  let imgLoaded = false;
+
+  // transformation state
+  let translateX = 0; // pixels relative to canvas center
+  let translateY = 0;
+  let scale = 1;
+  let minScale = 1; // computed so image fits by default
+  let maxScale = 4;
+
+  // pointer (pan/pinch) tracking
+  const pointers = new Map(); // pointerId -> {x,y}
+  let lastDistance = null;
+
+  // helper to reset transforms to fit image inside canvas (no auto-zoom)
+  function computeInitialScaleAndCenter() {
+    const cw = cropCanvas.width;
+    const ch = cropCanvas.height;
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+    if (!iw || !ih) {
+      minScale = 1; scale = 1; translateX = 0; translateY = 0; return;
+    }
+
+    // Fit image inside the square (cover vs contain?). Gmail uses contain so user can zoom in.
+    // Set minScale so the *smaller* side of the image fills the canvas, but we want to show whole image (contain).
+    // We'll choose 'contain' so the whole image is visible initially (no automatic crop zoom).
+    const scaleX = cw / iw;
+    const scaleY = ch / ih;
+    minScale = Math.min(scaleX, scaleY); // contain -> whole image fits inside
+    if (!minScale || !isFinite(minScale)) minScale = 1;
+    scale = minScale; // start with image fully visible
+    maxScale = Math.max(minScale * 4, 3); // allow generous zoom
+
+    // center image
+    translateX = 0;
+    translateY = 0;
+
+    // set zoom range initial value/limits
+    zoomRange.min = Math.max(0.2, minScale / 4); // safety lower bound
+    zoomRange.max = Math.max(4, minScale * 6);
+    zoomRange.value = scale;
+  }
+
+  // draw current transformed image to canvas
+  function draw() {
+    const cw = cropCanvas.width, ch = cropCanvas.height;
+    ctx.clearRect(0,0,cw,ch);
+    ctx.save();
+    // compute scaled image size
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const iwScaled = iw * scale;
+    const ihScaled = ih * scale;
+    // draw image centered then translate
+    const cx = cw / 2 + translateX - iwScaled / 2;
+    const cy = ch / 2 + translateY - ihScaled / 2;
+    // background (white) for consistency
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0,0,cw,ch);
+    try {
+      ctx.drawImage(img, cx, cy, iwScaled, ihScaled);
+    } catch (err) {
+      // ignore draw errors if image not ready
+      // console.debug('draw error', err);
+    }
+    ctx.restore();
+  }
+
+  // pointer helpers
+  function getPointerPos(e) {
+    const rect = cropCanvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+  function getDistance(p1, p2) {
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    return Math.hypot(dx, dy);
+  }
+
+  // file load
+  avatarInput.addEventListener('change', (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) {
+      openCropBtn.disabled = true;
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      img = new Image();
+      img.onload = function() {
+        imgLoaded = true;
+        computeInitialScaleAndCenter();
+        draw();
+        openCropBtn.disabled = false;
+      };
+      img.onerror = function() {
+        imgLoaded = false;
+        openCropBtn.disabled = true;
+        console.error('Image load error');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(f);
+  });
+
+  // open modal
+  openCropBtn.addEventListener('click', () => {
+    if (!imgLoaded) return;
+    cropModal.show();
+    // draw once modal is shown: ensure canvas size matches styling (fixed 360px here)
+    setTimeout(() => { draw(); }, 40);
+  });
+
+  // zoom via range
+  zoomRange.addEventListener('input', (e) => {
+    const newScale = parseFloat(e.target.value);
+    // To keep focal point reasonable, we will scale around canvas center (simple)
+    scale = Math.max(minScale * 0.2, Math.min(Number(zoomRange.max), newScale));
+    draw();
+  });
+
+  // support mouse wheel zoom on canvas (optional)
+  cropCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = - e.deltaY;
+    // scale factor change
+    const factor = delta > 0 ? 1.04 : 0.96;
+    const newScale = scale * factor;
+    scale = Math.max(minScale * 0.2, Math.min(Number(zoomRange.max), newScale));
+    zoomRange.value = scale;
+    draw();
+  }, { passive: false });
+
+  // Pointer events for pan + pinch
+  cropCanvas.addEventListener('pointerdown', (e) => {
+    cropCanvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // store starting positions for movement
+    if (pointers.size === 1) {
+      // nothing else
+      cropCanvas.style.cursor = 'grabbing';
+    }
+  });
+
+  cropCanvas.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    const curr = { x: e.clientX, y: e.clientY };
+    // update stored
+    pointers.set(e.pointerId, curr);
+
+    if (pointers.size === 1) {
+      // single pointer => pan
+      const dx = curr.x - prev.x;
+      const dy = curr.y - prev.y;
+      // convert pixel movement in screen to canvas translation
+      translateX += dx;
+      translateY += dy;
+      draw();
+    } else if (pointers.size === 2) {
+      // pinch-to-zoom: compute distance change
+      const pts = Array.from(pointers.values());
+      const d = getDistance({x:pts[0].x, y:pts[0].y}, {x:pts[1].x, y:pts[1].y});
+      if (lastDistance != null) {
+        const factor = d / lastDistance;
+        const newScale = scale * factor;
+        // clamp
+        scale = Math.max(minScale * 0.2, Math.min(Number(zoomRange.max), newScale));
+        zoomRange.value = scale;
+      }
+      lastDistance = d;
+      draw();
+    }
+  });
+
+  function pointerUpOrCancel(e) {
+    if (pointers.has(e.pointerId)) pointers.delete(e.pointerId);
+    if (pointers.size < 2) lastDistance = null;
+    cropCanvas.style.cursor = 'default';
+  }
+  cropCanvas.addEventListener('pointerup', pointerUpOrCancel);
+  cropCanvas.addEventListener('pointercancel', pointerUpOrCancel);
+  cropCanvas.addEventListener('lostpointercapture', pointerUpOrCancel);
+
+  // Save cropped: create circular canvas of target size and export data URL
+  saveCropped.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!imgLoaded) return;
+
+    // desired output size (we'll use 512 for good quality)
+    const outSize = 512;
+    const out = document.createElement('canvas');
+    out.width = outSize; out.height = outSize;
+    const octx = out.getContext('2d');
+
+    // draw current view onto an intermediate canvas with same size as cropCanvas
+    const tmp = document.createElement('canvas');
+    tmp.width = cropCanvas.width; tmp.height = cropCanvas.height;
+    const tctx = tmp.getContext('2d');
+    // draw current image view into tmp using exact same math as draw()
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const iwScaled = iw * scale;
+    const ihScaled = ih * scale;
+    const cx = tmp.width / 2 + translateX - iwScaled / 2;
+    const cy = tmp.height / 2 + translateY - ihScaled / 2;
+    tctx.fillStyle = '#fff';
+    tctx.fillRect(0,0,tmp.width,tmp.height);
+    try { tctx.drawImage(img, cx, cy, iwScaled, ihScaled); } catch(err){}
+
+    // Now copy tmp -> out (scaling)
+    // We'll clip to a circle on 'out'
+    octx.save();
+    octx.beginPath();
+    octx.arc(outSize/2, outSize/2, outSize/2, 0, Math.PI*2);
+    octx.closePath();
+    octx.clip();
+    // draw tmp scaled to out
+    octx.drawImage(tmp, 0, 0, outSize, outSize);
+    octx.restore();
+
+    // get PNG dataURL and set hidden input
+    const dataURL = out.toDataURL('image/png');
+    croppedImageInput.value = dataURL;
+
+    // update previews
+    currentAvatar.src = dataURL;
+    if (smallPreview) smallPreview.src = dataURL;
+
+    // close modal
+    cropModal.hide();
+  });
+
+  // Clear/cancel image selection
+  clearImageBtn.addEventListener('click', () => {
+    avatarInput.value = '';
+    img = new Image();
+    imgLoaded = false;
+    openCropBtn.disabled = true;
+  });
+
+  // If user submits form but didn't crop (but selected a file),
+  // server can accept file directly; we flag use_fallback accordingly.
+  profileForm.addEventListener('submit', (e) => {
+    if (!croppedImageInput.value && avatarInput.files.length > 0) {
+      useFallballackFile.value = '1'; // let backend use uploaded file if needed
+    } else {
+      useFallbackFile.value = '0';
+    }
+  });
+
+  // Accessibility: when modal shown, ensure canvas is drawn
+  cropModalEl.addEventListener('shown.bs.modal', () => {
+    draw();
+  });
+
+})();
+</script>
+{% endblock %}

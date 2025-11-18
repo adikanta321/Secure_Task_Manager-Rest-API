@@ -1,0 +1,48 @@
+:root { --primary: #0d6efd; --muted: #6c757d; }
+
+      /* Navbar/hamburger/drawer */
+      .nav-avatar { width:34px; height:34px; border-radius:50%; object-fit:cover; border:2px solid #fff; }
+      .hamburger { width:40px; height:40px; display:grid; place-items:center; cursor:pointer; border-radius:8px; background:transparent; border:0; padding:0; }
+      .hamburger .bar { width:22px; height:2px; background:#333; display:block; transition:transform .25s ease, opacity .25s ease; border-radius:2px; }
+      .hamburger .bar.top { transform-origin:center; }
+      .hamburger .bar.bot { transform-origin:center; }
+      .hamburger.open .bar.top { transform: translateY(6px) rotate(45deg); }
+      .hamburger.open .bar.mid { opacity: 0; transform: scaleX(0); }
+      .hamburger.open .bar.bot { transform: translateY(-6px) rotate(-45deg); }
+
+      .drawer {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: 340px;
+        max-width: 86vw;
+        height: 100vh;
+        overflow-y: auto;
+        background: #ffffff;
+        box-shadow: 6px 0 40px rgba(0,0,0,.12);
+        transition: left .28s cubic-bezier(.2,.9,.3,1);
+        z-index: 3000;
+        padding: 1rem;
+        -webkit-overflow-scrolling: touch;
+      }
+      .drawer.open { left: 0; }
+      .drawer .avatar-large { width:76px; height:76px; border-radius:50%; object-fit:cover; border:3px solid #f1f1f1; }
+      .drawer .menu-link { display:block; padding:.75rem 0; color:#222; text-decoration:none; font-weight:500; }
+      .drawer .menu-link:hover { color:var(--primary); text-decoration:none; }
+      .drawer .drawer-footer { margin-top: 1.5rem; font-size:.9rem; color:var(--muted); }
+
+      .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); opacity: 0; visibility: hidden; transition: opacity .28s ease; z-index: 2950; }
+      .drawer-overlay.show { opacity: 1; visibility: visible; }
+
+      .nav-search { max-width:520px; width:100%; }
+      @media (max-width:767px) {
+        .desktop-only { display:none !important; }
+        .drawer { width: 86vw; }
+      }
+
+      footer.site-footer { background:#f8f9fa; padding:2rem 0; margin-top:3rem; }
+      footer .small-item { color:#666; font-size:.95rem; }
+
+      /* Search results small tweaks */
+      #searchResults { border-radius:6px; }
+      .search-item:hover { background:#f8f9ff; }

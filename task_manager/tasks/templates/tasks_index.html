@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}My Tasks{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <h3 class="mb-0 text-primary">
+            <i class="bi bi-list-task me-2"></i>My Tasks
+        </h3>
+
+        <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch">
+            
+            <div class="btn-group flex-grow-1" role="group" aria-label="Task filters" id="filterGroup">
+                <button class="btn btn-outline-primary btn-sm active" data-filter="all">All</button>
+                <button class="btn btn-outline-warning btn-sm" data-filter="pending">Pending</button>
+                <button class="btn btn-outline-success btn-sm" data-filter="completed">Completed</button>
+                <button class="btn btn-outline-info btn-sm" data-filter="favorites">Favorites</button>
+            </div>
+
+            <div class="flex-shrink-0">
+                <select id="sortSelect" class="form-select form-select-sm border-secondary">
+                    <option value="newest" selected>Sort: Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="title_asc">Title A → Z</option>
+                    <option value="title_desc">Title Z → A</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary btn-sm flex-shrink-0" id="newTaskBtn">
+                <i class="bi bi-plus-lg me-1"></i>New Task
+            </button>
+        </div>
+    </div>
+
+    <div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="taskForm">
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title" id="taskModalTitle">New Task</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="taskId">
+                        <div class="mb-3">
+                            <label for="taskTitle" class="form-label">Title<span class="text-danger">*</span></label>
+                            <input id="taskTitle" class="form-control" required placeholder="e.g. Finish project report">
+                        </div>
+                        <div class="mb-3">
+                            <label for="taskDesc" class="form-label">Description</label>
+                            <textarea id="taskDesc" class="form-control" rows="4" placeholder="Detailed notes about the task..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="taskStatus" class="form-label">Status</label>
+                            <select id="taskStatus" class="form-select">
+                                <option value="todo">To Do</option>
+                                <option value="inprogress">In Progress</option>
+                                <option value="done">Done</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                        <button class="btn btn-primary" type="submit">Save Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- View-only modal (new) -->
+    <div class="modal fade" id="viewModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+          <div class="modal-header bg-light">
+            <h5 class="modal-title" id="viewModalTitle">Task Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div id="viewBody">
+              <h5 id="viewTitle" class="mb-2"></h5>
+              <div id="viewStatus" class="mb-2"></div>
+              <p id="viewDescription" class="text-muted"></p>
+              <small class="text-muted" id="viewCreated"></small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tasksList" class="row g-4"></div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}

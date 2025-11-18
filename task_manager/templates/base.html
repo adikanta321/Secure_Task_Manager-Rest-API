@@ -1,0 +1,457 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Secure Task Manager{% endblock %}</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+      :root { --primary: #0d6efd; --muted: #6c757d; }
+
+      /* Navbar/hamburger/drawer */
+      .nav-avatar { width:34px; height:34px; border-radius:50%; object-fit:cover; border:2px solid #fff; }
+      .hamburger { width:40px; height:40px; display:grid; place-items:center; cursor:pointer; border-radius:8px; background:transparent; border:0; padding:0; }
+      .hamburger .bar { width:22px; height:2px; background:#333; display:block; transition:transform .25s ease, opacity .25s ease; border-radius:2px; }
+      .hamburger .bar.top { transform-origin:center; }
+      .hamburger .bar.bot { transform-origin:center; }
+      .hamburger.open .bar.top { transform: translateY(6px) rotate(45deg); }
+      .hamburger.open .bar.mid { opacity: 0; transform: scaleX(0); }
+      .hamburger.open .bar.bot { transform: translateY(-6px) rotate(-45deg); }
+
+      .drawer {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: 340px;
+        max-width: 86vw;
+        height: 100vh;
+        overflow-y: auto;
+        background: #ffffff;
+        box-shadow: 6px 0 40px rgba(0,0,0,.12);
+        transition: left .28s cubic-bezier(.2,.9,.3,1);
+        z-index: 3000;
+        padding: 1rem;
+        -webkit-overflow-scrolling: touch;
+      }
+      .drawer.open { left: 0; }
+      .drawer .avatar-large { width:76px; height:76px; border-radius:50%; object-fit:cover; border:3px solid #f1f1f1; }
+      .drawer .menu-link { display:block; padding:.75rem 0; color:#222; text-decoration:none; font-weight:500; }
+      .drawer .menu-link:hover { color:var(--primary); text-decoration:none; }
+      .drawer .drawer-footer { margin-top: 1.5rem; font-size:.9rem; color:var(--muted); }
+
+      .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); opacity: 0; visibility: hidden; transition: opacity .28s ease; z-index: 2950; }
+      .drawer-overlay.show { opacity: 1; visibility: visible; }
+
+      .nav-search { max-width:520px; width:100%; }
+      @media (max-width:767px) {
+        .desktop-only { display:none !important; }
+        .drawer { width: 86vw; }
+      }
+
+      footer.site-footer { background:#f8f9fa; padding:2rem 0; margin-top:3rem; }
+      footer .small-item { color:#666; font-size:.95rem; }
+
+      /* Search results small tweaks */
+      #searchResults { border-radius:6px; }
+      .search-item:hover { background:#f8f9ff; }
+    </style>
+  </head>
+
+  <body>
+    <!-- NAV -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
+      <div class="container">
+        <div class="d-flex align-items-center gap-2">
+          <button id="hamburger" class="hamburger d-lg-none" aria-label="Open menu" type="button">
+            <span class="bar top"></span>
+            <span class="bar mid"></span>
+            <span class="bar bot"></span>
+          </button>
+
+          <a class="navbar-brand fw-bold ms-2" href="{% url 'home' %}">SecureTask</a>
+        </div>
+
+        <!-- Desktop search (md+) -->
+        <div class="mx-auto nav-search d-none d-md-block">
+          <form id="navSearchForm" method="get" action="{% url 'home' %}">
+            <div class="input-group">
+              <input id="navSearchInput" class="form-control" name="q" placeholder="Search tasks by title..." aria-label="search">
+              <button class="btn btn-outline-secondary" type="submit">Search</button>
+            </div>
+          </form>
+          <!-- container for desktop results (positioned absolute relative to this container) -->
+          <div id="searchResultsContainer" style="position:relative; margin-top:.25rem;"></div>
+        </div>
+
+        <div class="d-flex align-items-center">
+          {% if user.is_authenticated %}
+            <div class="d-none d-lg-flex align-items-center gap-2">
+              {% if user.profile_image %}
+                <img src="{{ user.profile_image.url }}" alt="avatar" class="nav-avatar">
+              {% else %}
+                <img src="{% static 'default-avatar.png' %}" alt="avatar" class="nav-avatar">
+              {% endif %}
+
+              <div class="dropdown desktop-only">
+                <a class="nav-link dropdown-toggle p-0" href="#" role="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                  <small class="text-muted">{{ user.get_short_name|default:user.username }}</small>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                  <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">View profile</a></li>
+                  <li><a class="dropdown-item" href="{% url 'accounts:edit_profile' %}">Edit profile</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><a class="dropdown-item text-danger" href="#" id="logoutBtn">Logout</a></li>
+                </ul>
+              </div>
+            </div>
+          {% else %}
+            <a class="btn btn-outline-primary btn-sm ms-2" href="{% url 'accounts:login' %}">Login</a>
+          {% endif %}
+        </div>
+      </div>
+    </nav>
+
+    <!-- Mobile drawer -->
+    <div id="drawer" class="drawer" aria-hidden="true" role="dialog" aria-label="Main mobile menu">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        {% if user.is_authenticated and user.profile_image %}
+          <img id="drawerAvatar" src="{{ user.profile_image.url }}" class="avatar-large" alt="avatar">
+        {% else %}
+          <img id="drawerAvatar" src="{% static 'default-avatar.png' %}" class="avatar-large" alt="avatar">
+        {% endif %}
+
+        <div>
+          {% if user.is_authenticated %}
+            <div class="fw-bold">{{ user.get_short_name|default:user.username }}</div>
+            <div class="small text-muted">{{ user.email }}</div>
+          {% else %}
+            <div class="fw-bold">Welcome</div>
+            <div class="small text-muted">Please login or create an account</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Mobile search (visible only on small screens) -->
+      <div class="mb-3 d-md-none">
+        <form id="drawerSearchForm" method="get" action="{% url 'home' %}">
+          <div class="input-group">
+            <input id="drawerSearchInput" class="form-control" name="q" placeholder="Search tasks by title..." aria-label="search">
+            <button class="btn btn-outline-secondary" type="submit">Search</button>
+          </div>
+        </form>
+        <div id="drawerSearchResults" style="margin-top:.25rem;"></div>
+      </div>
+
+      <hr>
+
+      <nav class="mt-2">
+        {% if user.is_authenticated %}
+          <a class="menu-link no-decoration" href="{% url 'accounts:profile' %}">Profile</a>
+          <a class="menu-link no-decoration" href="{% url 'accounts:edit_profile' %}">Edit profile</a>
+          <a class="menu-link no-decoration" href="{% url 'home' %}">My tasks</a>
+          <a class="menu-link no-decoration" href="#">About</a>
+          <a class="menu-link text-danger no-decoration" href="#" id="drawerLogoutBtn">Logout</a>
+        {% else %}
+          <a class="menu-link no-decoration" href="{% url 'accounts:login' %}">Login</a>
+          <a class="menu-link no-decoration" href="{% url 'accounts:signup' %}">Create account</a>
+          <a class="menu-link no-decoration" href="#">About</a>
+        {% endif %}
+      </nav>
+
+      <div class="drawer-footer">
+        <hr>
+        <div class="small text-muted">SecureTask • Responsive task manager</div>
+      </div>
+    </div>
+
+    <div id="drawerOverlay" class="drawer-overlay" tabindex="-1" aria-hidden="true"></div>
+
+    <!-- MAIN -->
+    <main class="container mt-4">
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </main>
+
+    <!-- Logout modal -->
+    <div class="modal fade" id="confirmLogoutModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header"><h5 class="modal-title">Confirm logout</h5></div>
+          <div class="modal-body">Are you sure you want to logout?</div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <form method="post" action="{% url 'accounts:logout' %}" id="logoutForm">
+              {% csrf_token %}
+              <button class="btn btn-danger">Logout</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-md-6">
+            <h5>Secure Task Manager</h5>
+            <p class="small-item">Build better, stay organized. Responsive task manager built with Django.</p>
+          </div>
+          <div class="col-md-6 text-md-end">
+            <div class="small-item">User: <strong>{% if request.user.is_authenticated %}{{ request.user.get_short_name|default:request.user.username }}{% else %}—{% endif %}</strong></div>
+            <div class="small-item">Email: {% if request.user.is_authenticated %}<a href="mailto:{{ request.user.email }}">{{ request.user.email }}</a>{% else %}—{% endif %}</div>
+            <div class="small-item">Location: Your City</div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- helper: get csrftoken cookie for AJAX -->
+    <script>
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      const CSRF_TOKEN = getCookie('csrftoken');
+    </script>
+
+    <!-- Drawer + Logout JS -->
+    <script>
+      (function(){
+        const hamburger = document.getElementById('hamburger');
+        const drawer = document.getElementById('drawer');
+        const overlay = document.getElementById('drawerOverlay');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const drawerLogoutBtn = document.getElementById('drawerLogoutBtn');
+        const confirmLogoutModalEl = document.getElementById('confirmLogoutModal');
+        const confirmLogoutModal = confirmLogoutModalEl ? new bootstrap.Modal(confirmLogoutModalEl) : null;
+
+        if (!hamburger || !drawer || !overlay) return;
+
+        function openDrawer() {
+          drawer.classList.add('open');
+          overlay.classList.add('show');
+          hamburger.classList.add('open');
+          document.body.style.overflow = 'hidden';
+        }
+        function closeDrawer() {
+          drawer.classList.remove('open');
+          overlay.classList.remove('show');
+          hamburger.classList.remove('open');
+          document.body.style.overflow = '';
+        }
+
+        hamburger.addEventListener('click', function(e){
+          e.stopPropagation();
+          if (drawer.classList.contains('open')) closeDrawer(); else openDrawer();
+        });
+
+        overlay.addEventListener('click', closeDrawer);
+        window.addEventListener('keydown', function(ev){
+          if (ev.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
+        });
+
+        if (logoutBtn && confirmLogoutModal) {
+          logoutBtn.addEventListener('click', function(e){
+            e.preventDefault();
+            confirmLogoutModal.show();
+          });
+        }
+        if (drawerLogoutBtn && confirmLogoutModal) {
+          drawerLogoutBtn.addEventListener('click', function(e){
+            e.preventDefault();
+            confirmLogoutModal.show();
+          });
+        }
+
+        setTimeout(()=>{ drawer.style.visibility = 'visible'; }, 50);
+      })();
+    </script>
+
+    <!-- Live search JS (desktop + drawer) -->
+    <script>
+    (function(){
+      function debounce(fn, wait) {
+        let t;
+        return function(...args) {
+          clearTimeout(t);
+          t = setTimeout(() => fn.apply(this, args), wait);
+        };
+      }
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      const apiBase = '/api/tasks/';
+      const desktopInput = document.getElementById('navSearchInput');
+      const desktopForm  = document.getElementById('navSearchForm');
+      const desktopResultsContainer = document.getElementById('searchResultsContainer');
+
+      const drawerInput = document.getElementById('drawerSearchInput');
+      const drawerForm  = document.getElementById('drawerSearchForm');
+      const drawerResultsContainer = document.getElementById('drawerSearchResults');
+
+      function makeResultsList(isDrawer){
+        const el = document.createElement('div');
+        el.className = 'shadow-sm';
+        el.style.background = '#fff';
+        el.style.border = '1px solid rgba(0,0,0,0.08)';
+        el.style.boxShadow = '0 6px 20px rgba(0,0,0,0.08)';
+        el.style.zIndex = 4000;
+        el.style.maxHeight = '360px';
+        el.style.overflowY = 'auto';
+        el.style.display = 'none';
+        el.style.borderRadius = '6px';
+        if (!isDrawer) {
+          el.style.position = 'absolute';
+          el.style.left = '0'; el.style.right = '0';
+        } else {
+          el.style.position = 'static';
+        }
+        return el;
+      }
+
+      let desktopList = null;
+      let drawerList = null;
+      if (desktopResultsContainer) {
+        desktopList = makeResultsList(false);
+        desktopResultsContainer.appendChild(desktopList);
+      }
+      if (drawerResultsContainer) {
+        drawerList = makeResultsList(true);
+        drawerResultsContainer.appendChild(drawerList);
+      }
+
+      function renderResultsInto(listEl, tasks){
+        if (!listEl) return;
+        if (!tasks || tasks.length === 0) {
+          listEl.innerHTML = '<div class="p-3 text-muted small">No results</div>';
+          listEl.style.display = 'block';
+          return;
+        }
+        listEl.innerHTML = tasks.map(t => {
+          const title = (t.title || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          const desc = (t.description || '').slice(0,120).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          return `
+            <a href="#" class="search-item d-block p-3 text-decoration-none" data-id="${t.id}" style="border-bottom:1px solid rgba(0,0,0,0.04); color:#222;">
+              <div class="d-flex align-items-start justify-content-between">
+                <div>
+                  <div class="fw-semibold">${title}</div>
+                  <div class="small text-muted">${desc}</div>
+                </div>
+                <div class="text-end small text-muted">${t.status}</div>
+              </div>
+            </a>`;
+        }).join('');
+        listEl.style.display = 'block';
+      }
+
+      async function searchTasksAndRender(q, listEl){
+        if (!q || q.trim().length === 0) {
+          if (listEl) listEl.style.display = 'none';
+          return;
+        }
+        const url = apiBase + '?q=' + encodeURIComponent(q.trim());
+        try {
+          const res = await fetch(url, { credentials: 'same-origin' });
+          if (!res.ok) throw new Error('Search error');
+          const data = await res.json();
+          renderResultsInto(listEl, data);
+        } catch (err) {
+          if (listEl) {
+            listEl.innerHTML = '<div class="p-3 text-danger small">Search failed</div>';
+            listEl.style.display = 'block';
+          }
+          console.error('search error', err);
+        }
+      }
+
+      const debouncedDesktop = debounce((e) => searchTasksAndRender(e.target.value, desktopList), 250);
+      const debouncedDrawer  = debounce((e) => searchTasksAndRender(e.target.value, drawerList), 250);
+
+      if (desktopInput) {
+        desktopInput.addEventListener('input', debouncedDesktop);
+        desktopForm && desktopForm.addEventListener('submit', function(e){
+          e.preventDefault(); // prevent full-page submit for live search; remove if you prefer full submit
+        });
+        desktopList && desktopList.addEventListener('click', function(ev){
+          ev.preventDefault();
+          const item = ev.target.closest('.search-item');
+          if(!item) return;
+          const id = item.getAttribute('data-id');
+          if (typeof openEdit === 'function') {
+            openEdit(id);
+          } else {
+            console.log('clicked', id);
+          }
+          desktopList.style.display = 'none';
+        });
+        document.addEventListener('click', function(e){
+          if (!desktopResultsContainer) return;
+          if (!desktopResultsContainer.contains(e.target)) {
+            desktopList && (desktopList.style.display = 'none');
+          }
+        });
+      }
+
+      if (drawerInput) {
+        drawerInput.addEventListener('input', debouncedDrawer);
+        drawerForm && drawerForm.addEventListener('submit', function(e){
+          e.preventDefault();
+        });
+        drawerList && drawerList.addEventListener('click', function(ev){
+          ev.preventDefault();
+          const item = ev.target.closest('.search-item');
+          if(!item) return;
+          const id = item.getAttribute('data-id');
+          if (typeof openEdit === 'function') {
+            openEdit(id);
+          } else {
+            console.log('drawer clicked', id);
+          }
+          drawerList.style.display = 'none';
+        });
+      }
+
+    })();
+    </script>
+
+    {% block extra_js %}{% endblock %}
+  </body>
+  <script src="{% static 'js/main.js' %}"></script>
+</html>
